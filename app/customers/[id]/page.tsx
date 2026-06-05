@@ -31,12 +31,11 @@ const TIER_STYLES: Record<string, string> = {
   Enterprise: 'bg-ink-900/5 border-ink-900/20 text-ink-900',
 };
 
-export default function CustomerDetailPage({ params }: { params: { id: string } }) {
-  const c = getCustomer(params.id);
+export default async function CustomerDetailPage({ params }: { params: { id: string } }) {
+  const c = await getCustomer(params.id);
   if (!c) notFound();
 
-  const contacts = getContacts(c.id);
-  const activities = getActivities(c.id);
+  const [contacts, activities] = await Promise.all([getContacts(c.id), getActivities(c.id)]);
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">

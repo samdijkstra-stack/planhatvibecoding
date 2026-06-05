@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3';
+import type { Client } from '@libsql/client';
 import type { ActivityType, PlanTier } from './types';
 
 function daysFromNow(days: number): string {
@@ -436,58 +436,51 @@ const SEED: SeedCustomer[] = [
   },
 ];
 
-export function seedIfEmpty(db: Database.Database) {
-  const row = db.prepare('SELECT COUNT(*) AS n FROM customers').get() as { n: number };
-  if (row.n > 0) return;
+export async function seedIfEmpty(db: Client) {
+  const existing = await db.execute('SELECT COUNT(*) AS n FROM customers');
+  const n = Number(existing.rows[0]?.n ?? 0);
+  if (n > 0) return;
 
-  const insertCustomer = db.prepare(`
-    INSERT INTO customers (id, name, tier, mrr, renewal_date, csm, nps, usage, open_tickets, created_at, alerted_at)
-    VALUES (@id, @name, @tier, @mrr, @renewal_date, @csm, @nps, @usage, @open_tickets, @created_at, NULL)
-  `);
-  const insertContact = db.prepare(`
-    INSERT INTO contacts (id, customer_id, name, role, email)
-    VALUES (@id, @customer_id, @name, @role, @email)
-  `);
-  const insertActivity = db.prepare(`
-    INSERT INTO activities (id, customer_id, type, text, author, timestamp)
-    VALUES (@id, @customer_id, @type, @text, @author, @timestamp)
-  `);
+  const stmts: { sql: string; args: any[] }[] = [];
 
-  const tx = db.transaction(() => {
-    SEED.forEach((c, i) => {
-      const cid = id('cus', i + 1);
-      insertCustomer.run({
-        id: cid,
-        name: c.name,
-        tier: c.tier,
-        mrr: c.mrr,
-        renewal_date: daysFromNow(c.renewalDays),
-        csm: c.csm,
-        nps: c.nps,
-        usage: c.usage,
-        open_tickets: c.open_tickets,
-        created_at: daysFromNow(-c.createdDaysAgo),
-      });
-      c.contacts.forEach((co, j) =>
-        insertContact.run({
-          id: `${cid}_co_${String(j + 1).padStart(2, '0')}`,
-          customer_id: cid,
-          name: co.name,
-          role: co.role,
-          email: co.email,
-        })
-      );
-      c.activities.forEach((a, j) =>
-        insertActivity.run({
-          id: `${cid}_ac_${String(j + 1).padStart(2, '0')}`,
-          customer_id: cid,
-          type: a.type,
-          text: a.text,
-          author: a.author,
-          timestamp: daysFromNow(-a.daysAgo),
-        })
-      );
+  SEED.forEach((c, i) => {
+    const cid = id('cus', i + 1);
+    stmts.push({
+      sql: `INSERT INTO customers (id, name, tier, mrr, renewal_date, csm, nps, usage, open_tickets, created_at, alerted_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+      args: [
+        cid,
+        c.name,
+        c.tier,
+        c.mrr,
+        daysFromNow(c.renewalDays),
+        c.csm,
+        c.nps,
+        c.usage,
+        c.open_tickets,
+        daysFromNow(-c.createdDaysAgo),
+      ],
     });
+    c.contacts.forEach((co, j) =>
+      stmts.push({
+        sql: 'INSERT INTO contacts (id, customer_id, name, role, email) VALUES (?, ?, ?, ?, ?)',
+        args: [`${cid}_co_${String(j + 1).padStart(2, '0')}`, cid, co.name, co.role, co.email],
+      })
+    );
+    c.activities.forEach((a, j) =>
+      stmts.push({
+        sql: 'INSERT INTO activities (id, customer_id, type, text, author, timestamp) VALUES (?, ?, ?, ?, ?, ?)',
+        args: [
+          `${cid}_ac_${String(j + 1).padStart(2, '0')}`,
+          cid,
+          a.type,
+          a.text,
+          a.author,
+          daysFromNow(-a.daysAgo),
+        ],
+      })
+    );
   });
-  tx();
+
+  await db.batch(stmts, 'write');
 }

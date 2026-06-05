@@ -4,5 +4,5 @@ import { listCustomers } from '@/lib/customers';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  return NextResponse.json({ customers: listCustomers() });
+  return NextResponse.json({ customers: await listCustomers() });
 }

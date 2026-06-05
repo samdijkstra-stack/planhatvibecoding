@@ -2,16 +2,27 @@
 
 A demo Customer Success Platform for CSMs, built end-to-end as a single Next.js app. Optimised for a workshop walkthrough: clean, working, and easy to poke at.
 
-## Run it
+## Run it locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open <http://localhost:3000>. The SQLite DB at `./data/csp.db` is created and seeded on first request — no migration step.
+Open <http://localhost:3000>. An **in-memory libSQL** database is created and seeded on first request — no migration step, no file on disk.
 
-To reset the data, stop the dev server and delete `data/csp.db`; it will be recreated on the next run.
+The DB resets every time the dev server restarts (or, in production, on every cold start). For a workshop demo this is a feature: each session starts clean.
+
+## Deploy to Vercel
+
+The app is serverless-friendly (no native modules, no file I/O). To deploy:
+
+1. Go to <https://vercel.com/new> and import this GitHub repo.
+2. Accept the defaults — Vercel auto-detects Next.js.
+3. (Optional) Add `SLACK_WEBHOOK_URL` under **Environment Variables**.
+4. Click **Deploy**.
+
+That's it. Every push to `main` (or whichever branch you connect) redeploys automatically.
 
 ## Slack integration (optional)
 
@@ -62,13 +73,12 @@ components/
   LogTouchpointForm.tsx            # Posts to API, then router.refresh()
   SlackAlertButton.tsx             # Manual alert trigger
 lib/
-  db.ts                            # better-sqlite3 setup + schema + seed-on-first-run
+  db.ts                            # libSQL in-memory client + schema + seed-on-first-run
   seed.ts                          # 18 engineered customers w/ contacts & activities
   health.ts                        # Pure health function + churn-risk rule
-  customers.ts                     # Read/write helpers + maybeAutoAlert
+  customers.ts                     # Async read/write helpers + maybeAutoAlert
   slack.ts                         # Webhook poster + console fallback
   types.ts
-data/csp.db                        # Auto-created on first run (gitignored)
 .env.local.example                 # SLACK_WEBHOOK_URL placeholder
 ```
 
@@ -92,7 +102,8 @@ data/csp.db                        # Auto-created on first run (gitignored)
 
 ## Assumptions
 
-- No auth: the workshop demo is local-only. The Slack webhook URL is server-side via `.env.local`, never exposed to the browser.
+- No auth: the workshop demo has no login. The Slack webhook URL is server-side via `.env.local` (or Vercel env var), never exposed to the browser.
+- **Storage is in-memory libSQL.** Touchpoints persist within a warm instance but are wiped on cold start. For a workshop demo this is intentional (fresh seed per session). If you need durable storage, swap `:memory:` in `lib/db.ts` for a Turso (`libsql://…`) URL + auth token.
 - "CSM" defaults to a fixed roster in the seed; touchpoints default the author field to the assigned CSM but you can edit it.
 - "Days to renewal" can go negative if the renewal date has passed; the churn-risk rule treats negative as outside the 60-day window (red health still catches it).
 - Activities are append-only — there is no edit/delete UI.

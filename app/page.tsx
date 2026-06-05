@@ -4,8 +4,8 @@ import type { CustomerWithHealth } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-export default function HomePage() {
-  const customers = listCustomers();
+export default async function HomePage() {
+  const customers = await listCustomers();
   const totals = summarize(customers);
 
   return (

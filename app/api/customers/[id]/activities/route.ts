@@ -7,14 +7,14 @@ type TouchpointType = 'note' | 'call' | 'email' | 'meeting';
 const ALLOWED: TouchpointType[] = ['note', 'call', 'email', 'meeting'];
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  if (!getCustomer(params.id)) {
+  if (!(await getCustomer(params.id))) {
     return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
   }
-  return NextResponse.json({ activities: getActivities(params.id) });
+  return NextResponse.json({ activities: await getActivities(params.id) });
 }
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
-  if (!getCustomer(params.id)) {
+  if (!(await getCustomer(params.id))) {
     return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
   }
   let body: any;
@@ -38,7 +38,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     return NextResponse.json({ error: 'text is required' }, { status: 400 });
   }
 
-  const activity = logActivity({ customer_id: params.id, type, text, author });
+  const activity = await logActivity({ customer_id: params.id, type, text, author });
   const alert = await maybeAutoAlert(params.id);
 
   return NextResponse.json({ activity, alert });

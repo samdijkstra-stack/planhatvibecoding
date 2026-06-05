@@ -27,6 +27,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# database
-/data/*.db
-/data/*.db-*
+# vercel
+.vercel

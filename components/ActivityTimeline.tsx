@@ -1,13 +1,30 @@
 'use client';
 import type { Activity } from '@/lib/types';
 
-const TYPE_META: Record<Activity['type'], { icon: string; label: string; color: string }> = {
-  note: { icon: '📝', label: 'Note', color: 'bg-ink-100 text-ink-700 border-ink-200' },
-  call: { icon: '📞', label: 'Call', color: 'bg-brand-50 text-brand-700 border-brand-500/30' },
-  email: { icon: '✉️', label: 'Email', color: 'bg-good-50 text-good-700 border-good-500/30' },
-  meeting: { icon: '🤝', label: 'Meeting', color: 'bg-warn-50 text-warn-700 border-warn-500/30' },
-  system: { icon: '⚙️', label: 'System', color: 'bg-ink-50 text-ink-500 border-ink-200' },
+const ACT_STYLES: Record<
+  string,
+  { bg: string; color: string; label: string; char: string }
+> = {
+  email: { bg: '#e5efff', color: '#3b82f6', label: 'Email', char: '✉' },
+  meeting: { bg: '#e1f3e8', color: '#2a9c5e', label: 'Meeting', char: '⟳' },
+  system: { bg: '#f4f4f4', color: '#8a8a8a', label: 'System', char: '⚙' },
+  call: { bg: '#ede8fb', color: '#7b5ee6', label: 'Call', char: '↗' },
+  note: { bg: '#fcecd9', color: '#d97706', label: 'Note', char: '◻' },
+  alert: { bg: '#fde8dd', color: '#f06a2a', label: 'Alert', char: '!' },
 };
+
+function ActivityIcon({ type }: { type: Activity['type'] | 'alert' }) {
+  const s = ACT_STYLES[type] ?? ACT_STYLES.note;
+  return (
+    <div
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[5px] text-[12px] font-bold"
+      style={{ background: s.bg, color: s.color }}
+      aria-hidden
+    >
+      {s.char}
+    </div>
+  );
+}
 
 function relativeTime(iso: string) {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -18,43 +35,43 @@ function relativeTime(iso: string) {
   }
   if (days === 1) return 'yesterday';
   if (days < 30) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  return new Date(iso)
+    .toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+    .replace(',', '');
 }
 
 export default function ActivityTimeline({ activities }: { activities: Activity[] }) {
   if (activities.length === 0) {
-    return (
-      <div className="card p-6 text-center text-sm text-ink-500">
-        No activity yet. Log a touchpoint below.
-      </div>
-    );
+    return <div className="text-[12.5px] text-ink-4">No activity yet. Log a touchpoint below.</div>;
   }
   return (
-    <ol className="card divide-y divide-ink-100">
+    <div className="flex flex-col gap-[14px]">
       {activities.map((a) => {
-        const m = TYPE_META[a.type];
+        const s = ACT_STYLES[a.type] ?? ACT_STYLES.note;
         return (
-          <li key={a.id} className="flex gap-3 p-4">
-            <div
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border ${m.color}`}
-              aria-hidden
-            >
-              <span>{m.icon}</span>
-            </div>
+          <div key={a.id} className="flex items-start gap-3">
+            <ActivityIcon type={a.type} />
             <div className="flex-1">
-              <div className="mb-0.5 flex items-baseline justify-between gap-2">
-                <div className="text-xs font-medium uppercase tracking-wide text-ink-500">
-                  {m.label} <span className="text-ink-400">· {a.author}</span>
-                </div>
-                <div className="text-xs text-ink-400" title={new Date(a.timestamp).toLocaleString()}>
+              <div className="flex flex-wrap items-baseline gap-[6px]">
+                <span
+                  className="text-[11.5px] font-semibold capitalize"
+                  style={{ color: s.color }}
+                >
+                  {s.label}
+                </span>
+                <span className="text-[11px] text-ink-4">· {a.author}</span>
+                <span
+                  className="ml-auto text-[11px] text-ink-5"
+                  title={new Date(a.timestamp).toLocaleString()}
+                >
                   {relativeTime(a.timestamp)}
-                </div>
+                </span>
               </div>
-              <div className="text-sm text-ink-800">{a.text}</div>
+              <div className="mt-[2px] text-[12.5px] leading-[1.55] text-ink-3">{a.text}</div>
             </div>
-          </li>
+          </div>
         );
       })}
-    </ol>
+    </div>
   );
 }

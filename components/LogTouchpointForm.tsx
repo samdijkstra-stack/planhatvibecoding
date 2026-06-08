@@ -47,57 +47,56 @@ export default function LogTouchpointForm({
   }
 
   return (
-    <form onSubmit={submit} className="card p-4">
-      <div className="mb-3 text-sm font-semibold text-ink-900">Log a touchpoint</div>
-      <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-        <div>
-          <label className="label">Type</label>
-          <div className="flex flex-wrap gap-1.5">
-            {TYPES.map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setType(t)}
-                className={`chip cursor-pointer capitalize ${
-                  type === t
-                    ? 'border-brand-500 bg-brand-50 text-brand-700'
-                    : 'border-ink-200 bg-white text-ink-700 hover:bg-ink-50'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <label className="label" htmlFor="author">
-            Author
-          </label>
-          <input
-            id="author"
-            className="input"
-            value={author}
-            onChange={(e) => setAuthor(e.target.value)}
-            placeholder="Your name"
-          />
-        </div>
+    <form
+      onSubmit={submit}
+      className="rounded border border-line bg-paper px-[18px] py-4"
+    >
+      <div className="mb-[10px] text-[11.5px] font-medium text-ink-2">Log a touchpoint</div>
+
+      <div className="mb-[10px] flex flex-wrap gap-[5px]">
+        {TYPES.map((t) => {
+          const active = type === t;
+          return (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setType(t)}
+              className="cursor-pointer rounded-rect px-[11px] py-1 text-[11.5px] capitalize transition-colors duration-100"
+              style={{
+                border: `1px solid ${active ? '#1f1f1f' : '#e5e5e5'}`,
+                background: active ? '#0a0a0a' : '#ffffff',
+                color: active ? '#ffffff' : '#595959',
+              }}
+            >
+              {t}
+            </button>
+          );
+        })}
       </div>
-      <div className="mb-3">
-        <label className="label" htmlFor="text">
-          Notes
-        </label>
-        <textarea
-          id="text"
-          className="input min-h-[88px]"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="What happened? Any next steps?"
+
+      <input
+        className="mb-2 w-full rounded-[3px] border border-line bg-white px-[10px] py-2 text-[12.5px] text-ink-1 placeholder:text-ink-5 focus:border-ink-2 focus:outline-none"
+        value={author}
+        onChange={(e) => setAuthor(e.target.value)}
+        placeholder="Author"
+      />
+
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Add notes…"
+        className="min-h-14 w-full resize-y rounded-[3px] border border-line bg-white px-[10px] py-2 text-[12.5px] leading-[1.5] text-ink-1 placeholder:text-ink-5 focus:border-ink-2 focus:outline-none"
+        disabled={submitting}
+      />
+
+      {error && <div className="mt-2 text-[11.5px] text-signal">{error}</div>}
+
+      <div className="mt-2 flex justify-end">
+        <button
+          type="submit"
           disabled={submitting}
-        />
-      </div>
-      {error && <div className="mb-3 text-sm text-bad-700">{error}</div>}
-      <div className="flex items-center justify-end gap-2">
-        <button type="submit" className="btn-primary" disabled={submitting}>
+          className="rounded-rect bg-signal px-4 py-[6px] text-[12.5px] font-medium text-white transition-colors duration-100 hover:bg-signal-deep disabled:opacity-60"
+        >
           {submitting ? 'Saving…' : 'Log touchpoint'}
         </button>
       </div>

@@ -1,52 +1,87 @@
 import type { HealthBand } from '@/lib/types';
 
-const STYLES: Record<HealthBand, { dot: string; chip: string; text: string }> = {
-  green: {
-    dot: 'bg-good-500',
-    chip: 'bg-good-50 border-good-500/30 text-good-700',
-    text: 'text-good-700',
-  },
-  amber: {
-    dot: 'bg-warn-500',
-    chip: 'bg-warn-50 border-warn-500/30 text-warn-700',
-    text: 'text-warn-700',
-  },
-  red: {
-    dot: 'bg-bad-500',
-    chip: 'bg-bad-50 border-bad-500/30 text-bad-700',
-    text: 'text-bad-700',
-  },
+// Per the design system:
+//   Healthy  ≥ 75 → green   #2a9c5e
+//   At watch ≥ 50 → amber   #d97706
+//   Critical < 50 → signal  #f06a2a (the brand orange)
+// The data layer's band ('green' | 'amber' | 'red') maps onto this scale.
+const BAND_COLOR: Record<HealthBand, { fg: string; bg: string; label: string }> = {
+  green: { fg: '#2a9c5e', bg: '#e1f3e8', label: 'Healthy' },
+  amber: { fg: '#d97706', bg: '#fcecd9', label: 'At watch' },
+  red: { fg: '#f06a2a', bg: '#fde8dd', label: 'Critical' },
 };
 
-export function HealthDot({ band }: { band: HealthBand }) {
-  return <span className={`inline-block h-2.5 w-2.5 rounded-full ${STYLES[band].dot}`} aria-label={band} />;
-}
-
-export function HealthBadge({
+export function HealthRing({
   score,
   band,
-  size = 'sm',
+  size = 82,
 }: {
   score: number;
   band: HealthBand;
-  size?: 'sm' | 'lg';
+  size?: number;
 }) {
-  const s = STYLES[band];
-  if (size === 'lg') {
-    return (
-      <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 ${s.chip}`}>
-        <span className={`h-3 w-3 rounded-full ${s.dot}`} />
-        <div>
-          <div className={`text-3xl font-semibold leading-none ${s.text}`}>{score}</div>
-          <div className="mt-0.5 text-xs font-medium uppercase tracking-wide opacity-80">{band}</div>
-        </div>
-      </div>
-    );
-  }
+  const { fg, label } = BAND_COLOR[band];
+  const r = size * 0.42;
+  const cx = size / 2;
+  const cy = size / 2;
+  const circ = 2 * Math.PI * r;
+  const dashOffset = circ * (1 - score / 100);
+  const stroke = size * 0.05;
   return (
-    <span className={`chip ${s.chip}`}>
-      <span className={`h-2 w-2 rounded-full ${s.dot}`} />
-      <span className="tabular-nums">{score}</span>
-    </span>
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#e5e5e5" strokeWidth={stroke} />
+        <circle
+          cx={cx}
+          cy={cy}
+          r={r}
+          fill="none"
+          stroke={fg}
+          strokeWidth={stroke}
+          strokeDasharray={circ}
+          strokeDashoffset={dashOffset}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${cx} ${cy})`}
+        />
+      </svg>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-[1px]">
+        <span
+          className="num leading-none"
+          style={{ color: fg, fontSize: size * 0.27, fontWeight: 600 }}
+        >
+          {score}
+        </span>
+        <span
+          className="uppercase"
+          style={{ color: '#8a8a8a', fontSize: size * 0.12, letterSpacing: '0.06em' }}
+        >
+          {label}
+        </span>
+      </div>
+    </div>
   );
+}
+
+export function SmallHealthBar({ score, band }: { score: number; band: HealthBand }) {
+  const { fg } = BAND_COLOR[band];
+  return (
+    <div className="flex items-center justify-end gap-2">
+      <div className="h-[3px] w-11 shrink-0 overflow-hidden rounded-[2px] bg-line">
+        <div
+          className="h-full rounded-[2px]"
+          style={{ width: `${score}%`, background: fg }}
+        />
+      </div>
+      <span
+        className="num min-w-[20px] text-right text-[12.5px] font-semibold"
+        style={{ color: fg }}
+      >
+        {score}
+      </span>
+    </div>
+  );
+}
+
+export function bandColor(band: HealthBand) {
+  return BAND_COLOR[band];
 }

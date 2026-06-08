@@ -1,18 +1,13 @@
-export function ChurnFlag({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
-  if (size === 'lg') {
-    return (
-      <span className="inline-flex items-center gap-1.5 rounded-md bg-bad-50 px-2.5 py-1 text-xs font-semibold text-bad-700">
-        <span aria-hidden>🚩</span> Churn risk
-      </span>
-    );
-  }
+export function ChurnFlag({ size = 11 }: { size?: number }) {
   return (
-    <span
-      className="inline-flex items-center text-bad-600"
-      title="Churn risk"
+    <svg
+      width={size}
+      height={(size * 12) / 11}
+      viewBox="0 0 11 12"
+      fill="currentColor"
       aria-label="Churn risk"
     >
-      🚩
-    </span>
+      <path d="M1.5 0.5v11M1.5 0.5H9L6.8 4 9 7.5H1.5V0.5z" />
+    </svg>
   );
 }

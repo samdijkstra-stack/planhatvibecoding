@@ -28,24 +28,27 @@ export default function SlackAlertButton({ customerId }: { customerId: string })
     }
   }
 
+  const label =
+    status === 'sending'
+      ? 'Sending…'
+      : status === 'sent'
+      ? 'Slack alert sent'
+      : status === 'fallback'
+      ? 'Logged to console'
+      : 'Send Slack alert';
+
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex flex-col items-end gap-[6px]">
       <button
         type="button"
         onClick={send}
         disabled={status === 'sending'}
-        className="btn-danger"
+        className="rounded-rect bg-ink-1 px-3 py-[6px] text-[11.5px] font-medium uppercase tracking-eyebrow text-white transition-colors duration-100 hover:bg-ink-2 disabled:opacity-60"
       >
-        {status === 'sending'
-          ? 'Sending…'
-          : status === 'sent'
-          ? '✓ Slack alert sent'
-          : status === 'fallback'
-          ? '✓ Logged to console'
-          : '🚨 Send Slack alert'}
+        {label}
       </button>
       {message && (
-        <span className="max-w-xs text-right text-xs text-ink-500">{message}</span>
+        <span className="max-w-[260px] text-right text-[10.5px] text-ink-4">{message}</span>
       )}
     </div>
   );

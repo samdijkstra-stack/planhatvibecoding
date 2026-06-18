@@ -71,71 +71,68 @@ interface NavItem {
   label: string;
   icon: ReactNode;
   href?: string;
+  matchPrefix?: string;
   disabled?: boolean;
 }
 
 const NAV: NavItem[] = [
-  { label: 'Customers', icon: ICONS.customers, href: '/' },
-  { label: 'Analytics', icon: ICONS.analytics, disabled: true },
-  { label: 'Playbooks', icon: ICONS.playbooks, disabled: true },
+  { label: 'Customers', icon: ICONS.customers, href: '/', matchPrefix: '/customers' },
+  { label: 'Analytics', icon: ICONS.analytics, href: '/analytics' },
+  { label: 'Playbooks', icon: ICONS.playbooks, href: '/playbooks' },
   { label: 'Calendar', icon: ICONS.calendar, disabled: true },
-  { label: 'Alerts', icon: ICONS.alerts, disabled: true },
+  { label: 'Alerts', icon: ICONS.alerts, href: '/alerts' },
 ];
+
+function isActive(item: NavItem, pathname: string): boolean {
+  if (!item.href) return false;
+  if (item.href === '/') {
+    if (pathname === '/') return true;
+    if (item.matchPrefix && pathname.startsWith(item.matchPrefix)) return true;
+    return false;
+  }
+  return pathname === item.href || pathname.startsWith(item.href + '/');
+}
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const isCustomersActive = pathname === '/' || pathname.startsWith('/customers');
+  const settingsActive = pathname === '/settings' || pathname.startsWith('/settings/');
+  const profileActive = pathname === '/profile' || pathname.startsWith('/profile/');
 
   return (
     <aside className="hidden h-screen w-[216px] shrink-0 flex-col bg-ink-1 md:flex">
       <div className="border-b border-white/[0.07] px-[18px] pb-[14px] pt-[18px]">
-        <div className="flex items-center gap-[9px]">
+        <Link href="/" className="flex items-center gap-[9px]">
           <HatLogo />
           <span className="text-[14.5px] font-medium tracking-[-0.01em] text-white/95">Planhat</span>
-        </div>
+        </Link>
       </div>
 
       <nav className="flex-1 overflow-y-auto py-[10px]">
         <div className="px-[18px] pb-[5px] pt-1 text-[9px] font-medium uppercase tracking-eyebrow-wide text-white/[0.22]">
           Workspace
         </div>
-        {NAV.map((item) => {
-          const active = item.label === 'Customers' ? isCustomersActive : false;
-          const inner = (
-            <span
-              className={[
-                'flex w-full items-center gap-2 px-[18px] py-[7px] text-[13px] text-left transition-colors duration-[120ms] ease-ease',
-                active
-                  ? 'border-l-2 border-signal bg-white/[0.07] font-medium text-white'
-                  : 'border-l-2 border-transparent font-normal text-white/[0.42] hover:text-white/[0.72]',
-                item.disabled ? 'cursor-not-allowed' : 'cursor-pointer',
-              ].join(' ')}
-            >
-              {item.icon}
-              {item.label}
-            </span>
-          );
-          return item.href && !item.disabled ? (
-            <Link key={item.label} href={item.href}>
-              {inner}
-            </Link>
-          ) : (
-            <div key={item.label}>{inner}</div>
-          );
-        })}
+        {NAV.map((item) => (
+          <NavRow key={item.label} item={item} active={isActive(item, pathname)} />
+        ))}
 
         <div className="mx-[18px] mt-[10px] border-t border-white/[0.07] pt-[10px]">
           <div className="pb-[5px] text-[9px] font-medium uppercase tracking-eyebrow-wide text-white/[0.22]">
             Account
           </div>
         </div>
-        <div className="flex w-full cursor-not-allowed items-center gap-2 border-l-2 border-transparent px-[18px] py-[7px] text-left text-[13px] font-normal text-white/[0.42] hover:text-white/[0.72]">
-          {ICONS.settings}
-          Settings
-        </div>
+        <NavRow
+          item={{ label: 'Settings', icon: ICONS.settings, href: '/settings' }}
+          active={settingsActive}
+        />
       </nav>
 
-      <div className="flex items-center gap-[9px] border-t border-white/[0.07] px-[14px] py-[10px]">
+      <Link
+        href="/profile"
+        className={[
+          'flex items-center gap-[9px] border-t border-white/[0.07] px-[14px] py-[10px] transition-colors duration-100',
+          profileActive ? 'bg-white/[0.05]' : 'hover:bg-white/[0.03]',
+        ].join(' ')}
+      >
         <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[3px] bg-signal text-[11px] font-semibold text-white">
           S
         </div>
@@ -143,7 +140,28 @@ export default function Sidebar() {
           <div className="text-[12.5px] font-medium leading-[1.3] text-white/[0.88]">Sam Dijkstra</div>
           <div className="text-[10.5px] text-white/[0.32]">CSM Lead</div>
         </div>
-      </div>
+      </Link>
     </aside>
   );
+}
+
+function NavRow({ item, active }: { item: NavItem; active: boolean }) {
+  const inner = (
+    <span
+      className={[
+        'flex w-full items-center gap-2 px-[18px] py-[7px] text-[13px] text-left transition-colors duration-[120ms] ease-ease',
+        active
+          ? 'border-l-2 border-signal bg-white/[0.07] font-medium text-white'
+          : 'border-l-2 border-transparent font-normal text-white/[0.42] hover:text-white/[0.72]',
+        item.disabled ? 'cursor-not-allowed' : 'cursor-pointer',
+      ].join(' ')}
+    >
+      {item.icon}
+      {item.label}
+    </span>
+  );
+  if (item.href && !item.disabled) {
+    return <Link href={item.href}>{inner}</Link>;
+  }
+  return <div>{inner}</div>;
 }

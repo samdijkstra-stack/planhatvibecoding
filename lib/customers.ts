@@ -75,6 +75,30 @@ export async function getActivities(customerId: string): Promise<Activity[]> {
   return res.rows.map(rowToActivity);
 }
 
+export interface ActivityWithCustomer extends Activity {
+  customer_name: string;
+}
+
+export async function getActivitiesByAuthor(
+  author: string,
+  limit = 12
+): Promise<ActivityWithCustomer[]> {
+  const db = await getDb();
+  const res = await db.execute({
+    sql: `SELECT a.*, c.name AS customer_name
+          FROM activities a
+          JOIN customers c ON c.id = a.customer_id
+          WHERE a.author = ?
+          ORDER BY a.timestamp DESC
+          LIMIT ?`,
+    args: [author, limit],
+  });
+  return res.rows.map((r) => ({
+    ...rowToActivity(r),
+    customer_name: String(r.customer_name),
+  }));
+}
+
 export async function logActivity(input: {
   customer_id: string;
   type: 'note' | 'call' | 'email' | 'meeting';

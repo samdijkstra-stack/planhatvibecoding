@@ -1,5 +1,11 @@
 import type { Client } from '@libsql/client';
-import type { ActivityType, PlanTier } from './types';
+import type {
+  ActivityType,
+  PlanTier,
+  StakeholderInfluence,
+  StakeholderSentiment,
+} from './types';
+import { computeHealth } from './health';
 
 function daysFromNow(days: number): string {
   const d = new Date();
@@ -436,6 +442,140 @@ const SEED: SeedCustomer[] = [
   },
 ];
 
+// Single-level account hierarchy: child account name → parent account name.
+const PARENTS: Record<string, string> = {
+  'NordTrend Retail': 'Northwind Trading',
+  'Sunset Apparel': 'Northwind Trading',
+  'Riverbend Logistics': 'Acme Logistics',
+};
+
+function deriveInfluence(role: string): StakeholderInfluence {
+  const r = role.toLowerCase();
+  if (/ceo|cto|coo|cfo|chief|founder|owner|vp|director|head|president/.test(r)) return 'high';
+  if (/lead|manager|principal|senior|architect/.test(r)) return 'medium';
+  return 'low';
+}
+
+function deriveSentiment(band: string, index: number): StakeholderSentiment {
+  if (band === 'green') {
+    if (index === 0) return 'champion';
+    return 'supporter';
+  }
+  if (band === 'amber') {
+    if (index === 0) return 'supporter';
+    if (index === 1) return 'neutral';
+    return index % 2 === 0 ? 'neutral' : 'detractor';
+  }
+  // red band
+  if (index === 0) return 'detractor';
+  if (index === 1) return 'blocker';
+  return index % 2 === 0 ? 'detractor' : 'neutral';
+}
+
+function noteFor(sentiment: StakeholderSentiment, name: string): string {
+  const first = name.split(' ')[0];
+  switch (sentiment) {
+    case 'champion':
+      return `${first} actively advocates internally and drives adoption.`;
+    case 'supporter':
+      return `${first} is positive and responsive in working sessions.`;
+    case 'neutral':
+      return `${first} is engaged but hasn't taken a strong position yet.`;
+    case 'detractor':
+      return `${first} has voiced concerns about value and fit.`;
+    case 'blocker':
+      return `${first} is actively skeptical and slowing decisions.`;
+  }
+}
+
+// Deterministic 0..1 noise from an integer seed (no Math.random — stable seeds).
+function noise(seed: number): number {
+  const x = Math.sin(seed * 99.13) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+function clampN(n: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, n));
+}
+
+const HISTORY_WEEKS = 12;
+
+// Build weekly metric snapshots that trend toward each account's current values,
+// telling a believable story (red accounts declined into the red, etc.).
+function buildSnapshots(c: SeedCustomer, cid: string, seedBase: number) {
+  const band =
+    computeHealth({ usage: c.usage, open_tickets: c.open_tickets, nps: c.nps }).band;
+
+  const startUsage =
+    band === 'red' ? c.usage + 35 : band === 'amber' ? c.usage + 14 : c.usage - 6;
+  const startNps =
+    band === 'red' ? c.nps + 55 : band === 'amber' ? c.nps + 22 : c.nps - 8;
+  const startTickets =
+    band === 'red'
+      ? Math.max(0, c.open_tickets - 6)
+      : band === 'amber'
+      ? Math.max(0, c.open_tickets - 3)
+      : c.open_tickets + 1;
+
+  const rows: { sql: string; args: any[] }[] = [];
+  for (let w = 0; w < HISTORY_WEEKS; w++) {
+    const t = w / (HISTORY_WEEKS - 1); // 0 (oldest) → 1 (now)
+    const n = (noise(seedBase + w) - 0.5) * 6;
+    const usage = clampN(Math.round(startUsage + (c.usage - startUsage) * t + n), 0, 100);
+    const nps = clampN(Math.round(startNps + (c.nps - startNps) * t + n * 2), -100, 100);
+    const tickets = Math.max(
+      0,
+      Math.round(startTickets + (c.open_tickets - startTickets) * t)
+    );
+    const health = computeHealth({ usage, open_tickets: tickets, nps }).score;
+    const weekIso = daysFromNow(-(HISTORY_WEEKS - 1 - w) * 7);
+    rows.push({
+      sql: `INSERT INTO metric_snapshots (id, customer_id, week, health, usage, nps, mrr, open_tickets)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [`${cid}_ms_${String(w).padStart(2, '0')}`, cid, weekIso, health, usage, nps, c.mrr, tickets],
+    });
+  }
+  return rows;
+}
+
+// Seed comment threads with @mentions on a few accounts.
+const SEED_COMMENTS: Array<{
+  customer: string;
+  author: string;
+  body: string;
+  mentions: string[];
+  daysAgo: number;
+}> = [
+  {
+    customer: 'Hanseatic Bank',
+    author: 'Sam Dijkstra',
+    body: "Procurement has started an RFP review. Looping in @Lina Carlsson — you ran a similar save at Mediterraneo, any playbook tips?",
+    mentions: ['Lina Carlsson'],
+    daysAgo: 5,
+  },
+  {
+    customer: 'Hanseatic Bank',
+    author: 'Lina Carlsson',
+    body: "@Sam Dijkstra happy to help — the key was getting the SOC2 pack over within 48h and securing an exec sponsor call. I'll share the template.",
+    mentions: ['Sam Dijkstra'],
+    daysAgo: 4,
+  },
+  {
+    customer: 'Atlas Telecom',
+    author: 'Sam Dijkstra',
+    body: "Infra issues are blocking adoption. @Daniel Park can you join the war-room sync Thursday for an engineering perspective?",
+    mentions: ['Daniel Park'],
+    daysAgo: 2,
+  },
+  {
+    customer: 'Acme Logistics',
+    author: 'Sam Dijkstra',
+    body: "APAC expansion looking strong. @Maya Lopez want you to shadow this QBR — good reference-account playbook to learn.",
+    mentions: ['Maya Lopez'],
+    daysAgo: 6,
+  },
+];
+
 export async function seedIfEmpty(db: Client) {
   // Seed admin user
   const existingUsers = await db.execute('SELECT COUNT(*) AS n FROM users');
@@ -451,13 +591,24 @@ export async function seedIfEmpty(db: Client) {
   const n = Number(existing.rows[0]?.n ?? 0);
   if (n > 0) return;
 
+  // Resolve account name → id for hierarchy + comment wiring.
+  const idByName = new Map<string, string>();
+  SEED.forEach((c, i) => idByName.set(c.name, id('cus', i + 1)));
+
   const stmts: { sql: string; args: any[] }[] = [];
 
   SEED.forEach((c, i) => {
     const cid = id('cus', i + 1);
+    const parentId = PARENTS[c.name] ? idByName.get(PARENTS[c.name]) ?? null : null;
+    const band = computeHealth({
+      usage: c.usage,
+      open_tickets: c.open_tickets,
+      nps: c.nps,
+    }).band;
+
     stmts.push({
-      sql: `INSERT INTO customers (id, name, tier, mrr, renewal_date, csm, nps, usage, open_tickets, created_at, alerted_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+      sql: `INSERT INTO customers (id, name, tier, mrr, renewal_date, csm, nps, usage, open_tickets, created_at, alerted_at, parent_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
       args: [
         cid,
         c.name,
@@ -469,14 +620,28 @@ export async function seedIfEmpty(db: Client) {
         c.usage,
         c.open_tickets,
         daysFromNow(-c.createdDaysAgo),
+        parentId,
       ],
     });
-    c.contacts.forEach((co, j) =>
+
+    c.contacts.forEach((co, j) => {
+      const influence = deriveInfluence(co.role);
+      const sentiment = deriveSentiment(band, j);
       stmts.push({
-        sql: 'INSERT INTO contacts (id, customer_id, name, role, email) VALUES (?, ?, ?, ?, ?)',
-        args: [`${cid}_co_${String(j + 1).padStart(2, '0')}`, cid, co.name, co.role, co.email],
-      })
-    );
+        sql: 'INSERT INTO contacts (id, customer_id, name, role, email, influence, sentiment, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        args: [
+          `${cid}_co_${String(j + 1).padStart(2, '0')}`,
+          cid,
+          co.name,
+          co.role,
+          co.email,
+          influence,
+          sentiment,
+          noteFor(sentiment, co.name),
+        ],
+      });
+    });
+
     c.activities.forEach((a, j) =>
       stmts.push({
         sql: 'INSERT INTO activities (id, customer_id, type, text, author, timestamp) VALUES (?, ?, ?, ?, ?, ?)',
@@ -490,6 +655,26 @@ export async function seedIfEmpty(db: Client) {
         ],
       })
     );
+
+    // Weekly metric history
+    buildSnapshots(c, cid, (i + 1) * 1000).forEach((r) => stmts.push(r));
+  });
+
+  // Comment threads
+  SEED_COMMENTS.forEach((cm, i) => {
+    const cid = idByName.get(cm.customer);
+    if (!cid) return;
+    stmts.push({
+      sql: 'INSERT INTO comments (id, customer_id, author, body, mentions, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      args: [
+        `cmt_seed_${String(i + 1).padStart(2, '0')}`,
+        cid,
+        cm.author,
+        cm.body,
+        JSON.stringify(cm.mentions),
+        daysFromNow(-cm.daysAgo),
+      ],
+    });
   });
 
   await db.batch(stmts, 'write');

@@ -23,14 +23,36 @@ async function init(): Promise<Client> {
          usage REAL NOT NULL,
          open_tickets INTEGER NOT NULL,
          created_at TEXT NOT NULL,
-         alerted_at TEXT
+         alerted_at TEXT,
+         parent_id TEXT
        )`,
       `CREATE TABLE IF NOT EXISTS contacts (
          id TEXT PRIMARY KEY,
          customer_id TEXT NOT NULL,
          name TEXT NOT NULL,
          role TEXT NOT NULL,
-         email TEXT NOT NULL
+         email TEXT NOT NULL,
+         influence TEXT NOT NULL DEFAULT 'medium',
+         sentiment TEXT NOT NULL DEFAULT 'neutral',
+         notes TEXT NOT NULL DEFAULT ''
+       )`,
+      `CREATE TABLE IF NOT EXISTS metric_snapshots (
+         id TEXT PRIMARY KEY,
+         customer_id TEXT NOT NULL,
+         week TEXT NOT NULL,
+         health INTEGER NOT NULL,
+         usage REAL NOT NULL,
+         nps INTEGER NOT NULL,
+         mrr REAL NOT NULL,
+         open_tickets INTEGER NOT NULL
+       )`,
+      `CREATE TABLE IF NOT EXISTS comments (
+         id TEXT PRIMARY KEY,
+         customer_id TEXT NOT NULL,
+         author TEXT NOT NULL,
+         body TEXT NOT NULL,
+         mentions TEXT NOT NULL DEFAULT '[]',
+         created_at TEXT NOT NULL
        )`,
       `CREATE TABLE IF NOT EXISTS activities (
          id TEXT PRIMARY KEY,
@@ -74,6 +96,9 @@ async function init(): Promise<Client> {
        )`,
       `CREATE INDEX IF NOT EXISTS idx_contacts_customer ON contacts(customer_id)`,
       `CREATE INDEX IF NOT EXISTS idx_activities_customer ON activities(customer_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_snapshots_customer ON metric_snapshots(customer_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_comments_customer ON comments(customer_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_customers_parent ON customers(parent_id)`,
     ],
     'write'
   );

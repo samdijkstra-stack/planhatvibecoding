@@ -2,7 +2,16 @@ import type { Row } from '@libsql/client';
 import { getDb } from './db';
 import { computeHealth, daysBetween, isChurnRisk } from './health';
 import { buildAlertMessage, sendSlackAlert } from './slack';
-import type { Activity, Contact, Customer, CustomerWithHealth } from './types';
+import type {
+  Activity,
+  Comment,
+  Contact,
+  Customer,
+  CustomerWithHealth,
+  MetricSnapshot,
+  StakeholderInfluence,
+  StakeholderSentiment,
+} from './types';
 
 const ALERT_COOLDOWN_HOURS = 24;
 
@@ -19,6 +28,7 @@ function rowToCustomer(r: Row): Customer {
     open_tickets: Number(r.open_tickets),
     created_at: String(r.created_at),
     alerted_at: r.alerted_at == null ? null : String(r.alerted_at),
+    parent_id: r.parent_id == null ? null : String(r.parent_id),
   };
 }
 
@@ -29,6 +39,9 @@ function rowToContact(r: Row): Contact {
     name: String(r.name),
     role: String(r.role),
     email: String(r.email),
+    influence: (String(r.influence ?? 'medium') as StakeholderInfluence),
+    sentiment: (String(r.sentiment ?? 'neutral') as StakeholderSentiment),
+    notes: String(r.notes ?? ''),
   };
 }
 
@@ -127,6 +140,124 @@ function decorate(c: Customer, nowISO: string): CustomerWithHealth {
   const daysToRenewal = daysBetween(nowISO, c.renewal_date);
   const churnRisk = isChurnRisk(health.score, daysToRenewal);
   return { ...c, health, daysToRenewal, churnRisk };
+}
+
+// ── Time-series ─────────────────────────────────────────────────────────────
+
+export async function getMetricHistory(customerId: string): Promise<MetricSnapshot[]> {
+  const db = await getDb();
+  const res = await db.execute({
+    sql: 'SELECT * FROM metric_snapshots WHERE customer_id = ? ORDER BY week ASC',
+    args: [customerId],
+  });
+  return res.rows.map((r) => ({
+    customer_id: String(r.customer_id),
+    week: String(r.week),
+    health: Number(r.health),
+    usage: Number(r.usage),
+    nps: Number(r.nps),
+    mrr: Number(r.mrr),
+    open_tickets: Number(r.open_tickets),
+  }));
+}
+
+// Portfolio-wide weekly averages for the analytics trend chart.
+export async function getPortfolioHistory(): Promise<
+  Array<{ week: string; avgHealth: number; avgUsage: number; totalMrr: number }>
+> {
+  const db = await getDb();
+  const res = await db.execute(
+    `SELECT week,
+            ROUND(AVG(health)) AS avgHealth,
+            ROUND(AVG(usage)) AS avgUsage,
+            SUM(mrr) AS totalMrr
+     FROM metric_snapshots
+     GROUP BY week
+     ORDER BY week ASC`
+  );
+  return res.rows.map((r) => ({
+    week: String(r.week),
+    avgHealth: Number(r.avgHealth),
+    avgUsage: Number(r.avgUsage),
+    totalMrr: Number(r.totalMrr),
+  }));
+}
+
+// ── Account hierarchy ───────────────────────────────────────────────────────
+
+export async function getChildren(parentId: string): Promise<CustomerWithHealth[]> {
+  const db = await getDb();
+  const res = await db.execute({
+    sql: 'SELECT * FROM customers WHERE parent_id = ?',
+    args: [parentId],
+  });
+  const now = new Date().toISOString();
+  return res.rows.map((r) => decorate(rowToCustomer(r), now));
+}
+
+// ── Comments + mentions ─────────────────────────────────────────────────────
+
+function rowToComment(r: Row): Comment {
+  let mentions: string[] = [];
+  try {
+    mentions = JSON.parse(String(r.mentions ?? '[]'));
+  } catch {
+    mentions = [];
+  }
+  return {
+    id: String(r.id),
+    customer_id: String(r.customer_id),
+    author: String(r.author),
+    body: String(r.body),
+    mentions,
+    created_at: String(r.created_at),
+  };
+}
+
+export async function getComments(customerId: string): Promise<Comment[]> {
+  const db = await getDb();
+  const res = await db.execute({
+    sql: 'SELECT * FROM comments WHERE customer_id = ? ORDER BY created_at ASC',
+    args: [customerId],
+  });
+  return res.rows.map(rowToComment);
+}
+
+export async function addComment(input: {
+  customer_id: string;
+  author: string;
+  body: string;
+  mentions: string[];
+}): Promise<Comment> {
+  const db = await getDb();
+  const id = `cmt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const created_at = new Date().toISOString();
+  await db.execute({
+    sql: 'INSERT INTO comments (id, customer_id, author, body, mentions, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    args: [id, input.customer_id, input.author, input.body, JSON.stringify(input.mentions), created_at],
+  });
+  return { id, ...input, created_at };
+}
+
+export interface CommentWithCustomer extends Comment {
+  customer_name: string;
+}
+
+// Comments that mention a given name — for the "mentions of me" cockpit panel.
+export async function getMentionsOf(name: string, limit = 6): Promise<CommentWithCustomer[]> {
+  const db = await getDb();
+  const res = await db.execute({
+    sql: `SELECT cm.*, c.name AS customer_name
+          FROM comments cm
+          JOIN customers c ON c.id = cm.customer_id
+          WHERE cm.mentions LIKE ?
+          ORDER BY cm.created_at DESC
+          LIMIT ?`,
+    args: [`%${name}%`, limit],
+  });
+  return res.rows
+    .map((r) => ({ ...rowToComment(r), customer_name: String(r.customer_name) }))
+    .filter((c) => c.mentions.includes(name));
 }
 
 export async function maybeAutoAlert(customerId: string): Promise<{ fired: boolean; reason?: string }> {

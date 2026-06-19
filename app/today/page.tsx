@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifySessionToken } from '@/lib/auth';
-import { listCustomers, getActivities, getContacts } from '@/lib/customers';
+import { listCustomers, getActivities, getContacts, getMentionsOf } from '@/lib/customers';
 import { deriveEvents, EVENT_META, addDays } from '@/lib/events';
 import { getHealthSuggestions } from '@/lib/suggestions';
 import { ChurnFlag } from '@/components/ChurnFlag';
@@ -64,6 +64,7 @@ export default async function TodayPage() {
   if (!sessionUser) redirect('/login');
 
   const customers = await listCustomers();
+  const mentions = await getMentionsOf(sessionUser.name, 5);
   const now = new Date();
   const windowEnd = addDays(now, 14);
 
@@ -265,6 +266,32 @@ export default async function TodayPage() {
 
         {/* ── Right column ─────────────────────────────────────────────── */}
         <div className="flex flex-col">
+          {/* Mentions of me */}
+          {mentions.length > 0 && (
+            <section className="border-b border-line px-6 py-5">
+              <div className="eyebrow-sm mb-3">Mentions of you</div>
+              <ul className="flex flex-col gap-3">
+                {mentions.map((m) => (
+                  <li key={m.id}>
+                    <Link href={`/customers/${m.customer_id}`} className="group block">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-[12px] font-semibold text-ink-1 group-hover:underline">
+                          {m.customer_name}
+                        </span>
+                        <span className="shrink-0 text-[10.5px] text-ink-5">
+                          {relTime(m.created_at)}
+                        </span>
+                      </div>
+                      <div className="mt-[2px] line-clamp-2 text-[11.5px] leading-[1.5] text-ink-4">
+                        <span className="font-medium text-ink-3">{m.author}:</span> {m.body}
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {/* Needs attention */}
           <section className="border-b border-line px-6 py-5">
             <div className="eyebrow-sm mb-3">Needs attention</div>

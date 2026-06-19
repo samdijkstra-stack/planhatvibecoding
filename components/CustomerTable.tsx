@@ -84,12 +84,20 @@ function SearchIcon() {
   );
 }
 
-export default function CustomerTable({ customers }: { customers: CustomerWithHealth[] }) {
+export default function CustomerTable({
+  customers,
+  initialHealth = 'all',
+  initialRisk = false,
+}: {
+  customers: CustomerWithHealth[];
+  initialHealth?: HealthFilter;
+  initialRisk?: boolean;
+}) {
   const [sortKey, setSortKey] = useState<SortKey>('health');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [search, setSearch] = useState('');
-  const [healthFilter, setHealthFilter] = useState<HealthFilter>('all');
-  const [riskOnly, setRiskOnly] = useState(false);
+  const [healthFilter, setHealthFilter] = useState<HealthFilter>(initialHealth);
+  const [riskOnly, setRiskOnly] = useState(initialRisk);
 
   const visible = useMemo(() => {
     let arr = [...customers];

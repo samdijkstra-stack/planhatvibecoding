@@ -45,6 +45,12 @@ const ICONS = {
       <rect x="12" y="1.5" width="2.5" height="13" rx="0.5" />
     </svg>
   ),
+  forecast: (
+    <svg {...stroke} aria-hidden>
+      <path d="M1.5 11.5l4-4 3 3 6-6" />
+      <path d="M11 4.5h3.5V8" />
+    </svg>
+  ),
   playbooks: (
     <svg {...stroke} aria-hidden>
       <circle cx="8" cy="8" r="6.5" />
@@ -85,6 +91,7 @@ const NAV: NavItem[] = [
   { label: 'Today', icon: ICONS.today, href: '/today' },
   { label: 'Customers', icon: ICONS.customers, href: '/', matchPrefix: '/customers' },
   { label: 'Analytics', icon: ICONS.analytics, href: '/analytics' },
+  { label: 'Forecast', icon: ICONS.forecast, href: '/forecast' },
   { label: 'Playbooks', icon: ICONS.playbooks, href: '/playbooks' },
   { label: 'Calendar', icon: ICONS.calendar, href: '/calendar' },
   { label: 'Alerts', icon: ICONS.alerts, href: '/alerts' },

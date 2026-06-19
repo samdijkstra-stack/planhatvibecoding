@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { listCustomers } from '@/lib/customers';
+import { listCustomers, getPortfolioHistory } from '@/lib/customers';
 import { ChurnFlag } from '@/components/ChurnFlag';
 import { SmallHealthBar } from '@/components/HealthBadge';
+import { Sparkline } from '@/components/Sparkline';
 import type { CustomerWithHealth, PlanTier } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,10 @@ function pct(n: number, total: number) {
 }
 
 export default async function AnalyticsPage() {
-  const customers = await listCustomers();
+  const [customers, portfolioHistory] = await Promise.all([
+    listCustomers(),
+    getPortfolioHistory(),
+  ]);
   const total = customers.length;
   const portfolioMrr = customers.reduce((s, c) => s + c.mrr, 0);
   const atRiskMrr = customers.filter((c) => c.churnRisk).reduce((s, c) => s + c.mrr, 0);
@@ -75,27 +79,65 @@ export default async function AnalyticsPage() {
         <div className="grid grid-cols-2 gap-0 md:grid-cols-5">
           <KPI label="Total customers" value={String(total)} sub={`Across ${csms.length} CSMs`} />
           <KPI label="Portfolio MRR" value={fmtEur(portfolioMrr)} sub={`${fmtEur(portfolioMrr * 12)} ARR`} />
-          <KPI label="At-risk MRR" value={fmtEur(atRiskMrr)} sub={`${churnRisks} accounts`} color="#f06a2a" />
+          <KPI label="At-risk MRR" value={fmtEur(atRiskMrr)} sub={`${churnRisks} accounts ↗`} color="#f06a2a" href="/?risk=1" />
           <KPI label="Average health" value={String(avgHealth)} sub={avgHealth >= 70 ? 'Healthy band' : avgHealth >= 40 ? 'At-watch band' : 'Critical band'} />
           <KPI label="Average NPS" value={`${avgNps >= 0 ? '+' : ''}${avgNps}`} sub={`Usage ${avgUsage}% avg`} last />
         </div>
       </section>
 
       <section className="border-t border-line px-8 py-6">
-        <div className="eyebrow-sm mb-3">Health distribution</div>
-        <div className="overflow-hidden rounded border border-line">
-          <div className="flex h-3">
-            <div style={{ width: `${pct(greens, total)}%`, background: '#2a9c5e' }} />
-            <div style={{ width: `${pct(ambers, total)}%`, background: '#d97706' }} />
-            <div style={{ width: `${pct(reds, total)}%`, background: '#f06a2a' }} />
-          </div>
+        <div className="mb-3 flex items-baseline justify-between">
+          <div className="eyebrow-sm">Health distribution</div>
+          <span className="text-[11px] text-ink-4">Click a band to drill in ↓</span>
+        </div>
+        <div className="flex h-3 overflow-hidden rounded border border-line">
+          <Link href="/?health=green" style={{ width: `${pct(greens, total)}%`, background: '#2a9c5e' }} className="transition-opacity hover:opacity-80" />
+          <Link href="/?health=amber" style={{ width: `${pct(ambers, total)}%`, background: '#d97706' }} className="transition-opacity hover:opacity-80" />
+          <Link href="/?health=red" style={{ width: `${pct(reds, total)}%`, background: '#f06a2a' }} className="transition-opacity hover:opacity-80" />
         </div>
         <div className="mt-3 grid grid-cols-3 gap-6">
-          <Legend dot="#2a9c5e" label="Healthy" count={greens} share={pct(greens, total)} />
-          <Legend dot="#d97706" label="At watch" count={ambers} share={pct(ambers, total)} />
-          <Legend dot="#f06a2a" label="Critical" count={reds} share={pct(reds, total)} />
+          <Legend href="/?health=green" dot="#2a9c5e" label="Healthy" count={greens} share={pct(greens, total)} />
+          <Legend href="/?health=amber" dot="#d97706" label="At watch" count={ambers} share={pct(ambers, total)} />
+          <Legend href="/?health=red" dot="#f06a2a" label="Critical" count={reds} share={pct(reds, total)} />
         </div>
       </section>
+
+      {portfolioHistory.length >= 2 && (
+        <section className="border-t border-line px-8 py-6">
+          <div className="mb-1 flex items-baseline justify-between">
+            <div className="eyebrow-sm">Portfolio health over time</div>
+            <span className="num text-[11.5px] text-ink-4">
+              Avg health{' '}
+              {(() => {
+                const d =
+                  portfolioHistory[portfolioHistory.length - 1].avgHealth -
+                  portfolioHistory[0].avgHealth;
+                return (
+                  <span style={{ color: d >= 0 ? '#2a9c5e' : '#f06a2a' }}>
+                    {d >= 0 ? '+' : ''}
+                    {d} over {portfolioHistory.length} weeks
+                  </span>
+                );
+              })()}
+            </span>
+          </div>
+          <div className="mt-3 flex items-center gap-6">
+            <Sparkline
+              values={portfolioHistory.map((h) => h.avgHealth)}
+              width={420}
+              height={64}
+              color="#f06a2a"
+              strokeWidth={2}
+            />
+            <div className="flex flex-col gap-1">
+              <div className="num text-[24px] font-semibold text-ink-1">
+                {portfolioHistory[portfolioHistory.length - 1].avgHealth}
+              </div>
+              <div className="text-[11px] text-ink-4">current avg health</div>
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="grid border-t border-line lg:grid-cols-2">
         <section className="border-b border-line px-8 py-6 lg:border-b-0 lg:border-r">
@@ -234,18 +276,17 @@ function KPI({
   sub,
   color,
   last,
+  href,
 }: {
   label: string;
   value: string;
   sub: string;
   color?: string;
   last?: boolean;
+  href?: string;
 }) {
-  return (
-    <div
-      className="py-2 pr-7"
-      style={{ borderRight: last ? undefined : '1px solid #e5e5e5', marginRight: last ? 0 : 0 }}
-    >
+  const inner = (
+    <>
       <div className="eyebrow">{label}</div>
       <div
         className="display num mt-2 leading-none"
@@ -254,13 +295,38 @@ function KPI({
         {value}
       </div>
       <div className="mt-1 text-[11.5px] text-ink-4">{sub}</div>
+    </>
+  );
+  const style = { borderRight: last ? undefined : '1px solid #e5e5e5' } as const;
+  if (href) {
+    return (
+      <Link href={href} className="py-2 pr-7 transition-opacity hover:opacity-70" style={style}>
+        {inner}
+      </Link>
+    );
+  }
+  return (
+    <div className="py-2 pr-7" style={style}>
+      {inner}
     </div>
   );
 }
 
-function Legend({ dot, label, count, share }: { dot: string; label: string; count: number; share: number }) {
-  return (
-    <div>
+function Legend({
+  dot,
+  label,
+  count,
+  share,
+  href,
+}: {
+  dot: string;
+  label: string;
+  count: number;
+  share: number;
+  href?: string;
+}) {
+  const inner = (
+    <>
       <div className="flex items-center gap-2">
         <span className="h-[8px] w-[8px] rounded-full" style={{ background: dot }} />
         <span className="eyebrow" style={{ color: dot }}>
@@ -270,6 +336,14 @@ function Legend({ dot, label, count, share }: { dot: string; label: string; coun
       <div className="num mt-1 text-[18px] font-medium text-ink-1">
         {count} <span className="text-[11.5px] font-normal text-ink-4">· {share}%</span>
       </div>
-    </div>
+    </>
   );
+  if (href) {
+    return (
+      <Link href={href} className="block rounded transition-opacity hover:opacity-70">
+        {inner}
+      </Link>
+    );
+  }
+  return <div>{inner}</div>;
 }

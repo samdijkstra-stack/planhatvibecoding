@@ -1,6 +1,13 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { getActivities, getContacts, getCustomer } from '@/lib/customers';
+import {
+  getActivities,
+  getContacts,
+  getCustomer,
+  getMetricHistory,
+  getChildren,
+  getComments,
+} from '@/lib/customers';
 import { HealthRing, bandColor } from '@/components/HealthBadge';
 import { ChurnFlag } from '@/components/ChurnFlag';
 import ActivityTimeline from '@/components/ActivityTimeline';
@@ -8,6 +15,12 @@ import LogTouchpointForm from '@/components/LogTouchpointForm';
 import SlackAlertButton from '@/components/SlackAlertButton';
 import { W_NPS, W_TICKETS, W_USAGE, TICKET_SATURATION, clamp } from '@/lib/health';
 import { getHealthSuggestions } from '@/lib/suggestions';
+import { explainHealth } from '@/lib/healthSignals';
+import { assessStakeholders, SENTIMENT_META, INFLUENCE_META } from '@/lib/stakeholders';
+import { TimeSeriesChart } from '@/components/TimeSeriesChart';
+import { Sparkline } from '@/components/Sparkline';
+import { CommentThread } from '@/components/CommentThread';
+import type { Contact } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -118,7 +131,18 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
   const c = await getCustomer(params.id);
   if (!c) notFound();
 
-  const [contacts, activities] = await Promise.all([getContacts(c.id), getActivities(c.id)]);
+  const [contacts, activities, history, children, comments, parent] = await Promise.all([
+    getContacts(c.id),
+    getActivities(c.id),
+    getMetricHistory(c.id),
+    getChildren(c.id),
+    getComments(c.id),
+    c.parent_id ? getCustomer(c.parent_id) : Promise.resolve(null),
+  ]);
+
+  const explanation = explainHealth(c, history);
+  const stakeholderHealth = assessStakeholders(contacts);
+  const healthSeries = history.map((h) => h.health);
 
   // Derive the same axis percentages the health function used, for display.
   const usagePct = clamp(c.usage, 0, 100);
@@ -201,7 +225,43 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
       <div className="grid" style={{ gridTemplateColumns: '1fr 320px' }}>
         <div className="flex flex-col gap-7 border-r border-line px-8 py-6">
           <section>
-            <div className="eyebrow-sm mb-[10px]">Health breakdown</div>
+            <div className="mb-[10px] flex items-center justify-between">
+              <div className="eyebrow-sm">Health breakdown</div>
+              {healthSeries.length >= 2 && (
+                <span className="inline-flex items-center gap-2">
+                  <Sparkline values={healthSeries} color={bc.fg} width={84} height={24} />
+                  {explanation.trend && (
+                    <span
+                      className="num text-[11.5px] font-medium"
+                      style={{
+                        color:
+                          explanation.trend.deltaHealth > 0
+                            ? '#2a9c5e'
+                            : explanation.trend.deltaHealth < 0
+                            ? '#f06a2a'
+                            : '#8a8a8a',
+                      }}
+                    >
+                      {explanation.trend.deltaHealth > 0 ? '+' : ''}
+                      {explanation.trend.deltaHealth}
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
+
+            {/* Why this score */}
+            <div
+              className="mb-[14px] rounded border-l-2 p-3 text-[12px] leading-[1.55]"
+              style={{ background: bc.bg, borderColor: bc.fg, color: '#3a3a3a' }}
+            >
+              <span className="font-medium text-ink-1">Why: </span>
+              {explanation.summary}
+              {explanation.trend && (
+                <span className="text-ink-3"> {explanation.trend.note}</span>
+              )}
+            </div>
+
             <div className="mb-[14px] text-[11.5px] leading-[1.6] text-ink-4">
               Weighted blend — usage ({Math.round(W_USAGE * 100)}%), support load (
               {Math.round(W_TICKETS * 100)}%), NPS ({Math.round(W_NPS * 100)}%)
@@ -226,11 +286,50 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
                 max={Math.round(W_NPS * 100)}
               />
             </div>
+
+            {/* Per-axis signals — the data behind each axis */}
+            <ul className="mt-4 flex flex-col gap-2">
+              {explanation.drivers.map((d) => (
+                <li key={d.axis} className="flex items-start gap-2 text-[12px] leading-[1.5]">
+                  <span
+                    className="mt-[5px] h-[6px] w-[6px] shrink-0 rounded-full"
+                    style={{
+                      background:
+                        d.tone === 'positive'
+                          ? '#2a9c5e'
+                          : d.tone === 'neutral'
+                          ? '#d97706'
+                          : '#f06a2a',
+                    }}
+                  />
+                  <span className="text-ink-3">
+                    <span className="font-medium text-ink-2">{d.axis}:</span> {d.signal}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          {history.length >= 2 && (
+            <section>
+              <div className="eyebrow-sm mb-3">History — last {history.length} weeks</div>
+              <TimeSeriesChart history={history} />
+            </section>
+          )}
+
+          <section>
+            <div className="eyebrow-sm mb-3">Relationship map</div>
+            <StakeholderMap contacts={contacts} assessment={stakeholderHealth} />
           </section>
 
           <section>
             <div className="eyebrow-sm mb-3">What to do this week</div>
             <SuggestionList customer={c} />
+          </section>
+
+          <section>
+            <div className="eyebrow-sm mb-3">Discussion</div>
+            <CommentThread customerId={c.id} initialComments={comments} />
           </section>
 
           <section>
@@ -244,6 +343,13 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
         </div>
 
         <aside className="flex flex-col gap-6 px-[22px] py-6">
+          {(parent || children.length > 0) && (
+            <section>
+              <div className="eyebrow-sm mb-3">Account family</div>
+              <AccountFamily current={c} parent={parent} children={children} />
+            </section>
+          )}
+
           <section>
             <div className="eyebrow-sm mb-3">Quick facts</div>
             <Row k="Plan tier" v={c.tier} />
@@ -323,6 +429,147 @@ function SuggestionList({ customer }: { customer: import('@/lib/types').Customer
         </li>
       ))}
     </ul>
+  );
+}
+
+function StakeholderMap({
+  contacts,
+  assessment,
+}: {
+  contacts: Contact[];
+  assessment: import('@/lib/stakeholders').StakeholderHealth;
+}) {
+  if (contacts.length === 0) {
+    return <p className="text-[12.5px] text-ink-4">No stakeholders mapped.</p>;
+  }
+  // Order by influence then sentiment rank (best first)
+  const order = { high: 0, medium: 1, low: 2 } as const;
+  const sorted = [...contacts].sort((a, b) => {
+    if (order[a.influence] !== order[b.influence]) return order[a.influence] - order[b.influence];
+    return SENTIMENT_META[b.sentiment].rank - SENTIMENT_META[a.sentiment].rank;
+  });
+
+  return (
+    <div>
+      <div
+        className="mb-3 flex items-start gap-2 rounded border-l-2 p-3 text-[12px] leading-[1.5]"
+        style={
+          assessment.riskNote
+            ? { background: '#fde8dd', borderColor: '#f06a2a', color: '#3a3a3a' }
+            : { background: '#e1f3e8', borderColor: '#2a9c5e', color: '#3a3a3a' }
+        }
+      >
+        <span>
+          <span className="font-medium text-ink-1">{assessment.coverageNote}</span>
+          {assessment.riskNote && <span className="text-ink-3"> {assessment.riskNote}</span>}
+        </span>
+      </div>
+
+      <ul className="flex flex-col divide-y divide-line rounded border border-line">
+        {sorted.map((co) => {
+          const sm = SENTIMENT_META[co.sentiment];
+          return (
+            <li key={co.id} className="flex items-start gap-3 px-3 py-[10px]">
+              <Avatar init={initials(co.name)} size={30} />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[12.5px] font-medium text-ink-1">{co.name}</span>
+                  <span className="text-[11px] text-ink-4">{co.role}</span>
+                </div>
+                <div className="mt-[3px] flex flex-wrap items-center gap-[6px]">
+                  <span
+                    className="inline-flex items-center rounded-rect px-[6px] py-[1px] text-[10px] font-medium"
+                    style={{ background: sm.bg, color: sm.color }}
+                  >
+                    {sm.label}
+                  </span>
+                  <span className="inline-flex items-center rounded-rect border border-line px-[6px] py-[1px] text-[10px] text-ink-4">
+                    {INFLUENCE_META[co.influence].label}
+                  </span>
+                </div>
+                {co.notes && (
+                  <div className="mt-[4px] text-[11.5px] leading-[1.45] text-ink-4">{co.notes}</div>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function AccountFamily({
+  current,
+  parent,
+  children,
+}: {
+  current: import('@/lib/types').CustomerWithHealth;
+  parent: import('@/lib/types').CustomerWithHealth | null;
+  children: import('@/lib/types').CustomerWithHealth[];
+}) {
+  const family = [parent, current, ...children].filter(Boolean) as import('@/lib/types').CustomerWithHealth[];
+  const rollupMrr = family.reduce((s, f) => s + f.mrr, 0);
+  const blendedHealth = Math.round(family.reduce((s, f) => s + f.health.score, 0) / family.length);
+
+  function FamilyRow({
+    cust,
+    role,
+    isCurrent,
+  }: {
+    cust: import('@/lib/types').CustomerWithHealth;
+    role: string;
+    isCurrent: boolean;
+  }) {
+    const bc = bandColor(cust.health.band);
+    return (
+      <Link
+        href={`/customers/${cust.id}`}
+        className={`flex items-center gap-2 rounded px-2 py-[7px] transition-colors hover:bg-paper ${
+          isCurrent ? 'bg-surface' : ''
+        }`}
+      >
+        <span className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ background: bc.fg }} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[12.5px] font-medium text-ink-1">
+            {cust.name}
+            {isCurrent && <span className="ml-1 text-[10px] text-ink-4">· current</span>}
+          </div>
+          <div className="text-[10.5px] text-ink-4">{role}</div>
+        </div>
+        <span className="num shrink-0 text-[11.5px] text-ink-3">{fmtCurrency(cust.mrr)}</span>
+      </Link>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between rounded border border-line bg-paper px-3 py-2">
+        <div>
+          <div className="text-[10px] uppercase tracking-eyebrow text-ink-4">Family ARR</div>
+          <div className="num text-[14px] font-semibold text-ink-1">{fmtCurrency(rollupMrr * 12)}</div>
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] uppercase tracking-eyebrow text-ink-4">Blended health</div>
+          <div
+            className="num text-[14px] font-semibold"
+            style={{
+              color: blendedHealth >= 70 ? '#2a9c5e' : blendedHealth >= 40 ? '#d97706' : '#f06a2a',
+            }}
+          >
+            {blendedHealth}
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-col">
+        {parent && <FamilyRow cust={parent} role="Parent account" isCurrent={false} />}
+        {!parent && <FamilyRow cust={current} role="Parent account" isCurrent={true} />}
+        {parent && <FamilyRow cust={current} role="This account" isCurrent={true} />}
+        {children.map((ch) => (
+          <FamilyRow key={ch.id} cust={ch} role="Subsidiary" isCurrent={false} />
+        ))}
+      </div>
+    </div>
   );
 }
 

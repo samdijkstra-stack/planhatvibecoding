@@ -24,6 +24,12 @@ const stroke = {
 };
 
 const ICONS = {
+  today: (
+    <svg {...stroke} aria-hidden>
+      <circle cx="8" cy="8" r="6.5" />
+      <path d="M8 4.5v3.5l2 2" />
+    </svg>
+  ),
   customers: (
     <svg {...stroke} aria-hidden>
       <path d="M10.5 13v-1a3 3 0 0 0-3-3h-3a3 3 0 0 0-3 3v1" />
@@ -76,6 +82,7 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
+  { label: 'Today', icon: ICONS.today, href: '/today' },
   { label: 'Customers', icon: ICONS.customers, href: '/', matchPrefix: '/customers' },
   { label: 'Analytics', icon: ICONS.analytics, href: '/analytics' },
   { label: 'Playbooks', icon: ICONS.playbooks, href: '/playbooks' },

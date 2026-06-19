@@ -7,6 +7,7 @@ import ActivityTimeline from '@/components/ActivityTimeline';
 import LogTouchpointForm from '@/components/LogTouchpointForm';
 import SlackAlertButton from '@/components/SlackAlertButton';
 import { W_NPS, W_TICKETS, W_USAGE, TICKET_SATURATION, clamp } from '@/lib/health';
+import { getHealthSuggestions } from '@/lib/suggestions';
 
 export const dynamic = 'force-dynamic';
 
@@ -228,6 +229,11 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
           </section>
 
           <section>
+            <div className="eyebrow-sm mb-3">What to do this week</div>
+            <SuggestionList customer={c} />
+          </section>
+
+          <section>
             <div className="eyebrow-sm mb-[14px]">Activity timeline</div>
             <ActivityTimeline activities={activities} />
 
@@ -281,6 +287,42 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
         </aside>
       </div>
     </div>
+  );
+}
+
+function SuggestionList({ customer }: { customer: import('@/lib/types').CustomerWithHealth }) {
+  const suggestions = getHealthSuggestions(customer);
+  if (suggestions.length === 0) {
+    return <p className="text-[12.5px] text-ink-4">No actions recommended at this time.</p>;
+  }
+  const DOT: Record<import('@/lib/suggestions').SuggestionPriority, string> = {
+    critical: '#f06a2a',
+    warning: '#d97706',
+    positive: '#2a9c5e',
+  };
+  return (
+    <ul className="flex flex-col gap-3">
+      {suggestions.map((s, i) => (
+        <li key={i} className="flex items-start gap-3 rounded border border-line p-3">
+          <span
+            className="mt-[5px] h-[7px] w-[7px] shrink-0 rounded-full"
+            style={{ background: DOT[s.priority] }}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="text-[12.5px] font-medium leading-[1.4] text-ink-1">{s.action}</div>
+            <div className="mt-[4px] text-[12px] leading-[1.55] text-ink-4">{s.detail}</div>
+            {s.playbookSlug && (
+              <Link
+                href={`/playbooks/${s.playbookSlug}`}
+                className="mt-2 inline-block text-[11.5px] font-medium text-signal hover:underline"
+              >
+                {s.playbookLabel} ↗
+              </Link>
+            )}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 

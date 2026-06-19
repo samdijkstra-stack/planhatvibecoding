@@ -1,7 +1,5 @@
 import { W_NPS, W_TICKETS, W_USAGE, TICKET_SATURATION } from '@/lib/health';
 
-export const dynamic = 'force-dynamic';
-
 const TEAM = [
   { name: 'Sam Dijkstra', role: 'CSM Lead', email: 'sam.dijkstra@planhat.com', initial: 'S' },
   { name: 'Lina Carlsson', role: 'Senior CSM', email: 'lina.carlsson@planhat.com', initial: 'L' },
@@ -10,38 +8,13 @@ const TEAM = [
 ];
 
 export default function SettingsPage() {
-  const slackConfigured = Boolean(process.env.SLACK_WEBHOOK_URL);
-
   return (
-    <div className="bg-white">
-      <div className="border-b border-line px-8 pb-5 pt-[22px]">
-        <div className="eyebrow mb-2">Workspace</div>
-        <h1 className="display text-[22px] leading-[1.1] text-ink-1">Settings</h1>
-        <p className="mt-1 text-[12.5px] text-ink-4">
-          Workspace configuration, integrations, and how health scores are computed.
-        </p>
-      </div>
-
+    <>
       <Section title="Workspace">
         <Field label="Workspace name" value="Planhat Demo" />
         <Field label="Default currency" value="EUR (€)" />
         <Field label="Date format" value="DD MMM YYYY" />
         <Field label="Locale" value="en-GB" />
-      </Section>
-
-      <Section title="Integrations">
-        <Field
-          label="Slack incoming webhook"
-          value={
-            slackConfigured ? (
-              <span className="text-good">Connected · alerts delivered to Slack</span>
-            ) : (
-              <span className="text-ink-4">Not configured · alerts logged to server console</span>
-            )
-          }
-        />
-        <Field label="Alert cooldown" value="24 hours per customer" />
-        <Field label="Auto-alert trigger" value="Health drops to red or churn-risk transitions" />
       </Section>
 
       <Section
@@ -106,7 +79,7 @@ export default function SettingsPage() {
         />
         <Field label="Database" value="libSQL in-memory · fresh on every cold start" />
       </Section>
-    </div>
+    </>
   );
 }
 

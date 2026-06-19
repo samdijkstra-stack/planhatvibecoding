@@ -7,6 +7,7 @@ import { ChurnFlag } from './ChurnFlag';
 
 type SortKey = 'health' | 'renewal' | 'mrr' | 'name';
 type SortDir = 'asc' | 'desc';
+type HealthFilter = 'all' | 'green' | 'amber' | 'red';
 
 function initials(name: string) {
   return name
@@ -67,34 +68,51 @@ function SortIcon() {
   );
 }
 
-const SORTABLE = new Set<SortKey | 'tier' | 'csm' | 'risk'>(['name', 'mrr', 'renewal', 'health']);
+const HEALTH_FILTERS: { key: HealthFilter; label: string; dot?: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'green', label: 'Healthy', dot: '#2a9c5e' },
+  { key: 'amber', label: 'At watch', dot: '#d97706' },
+  { key: 'red', label: 'Critical', dot: '#f06a2a' },
+];
+
+function SearchIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="6" cy="6" r="4" />
+      <path d="M10 10l2.5 2.5" />
+    </svg>
+  );
+}
 
 export default function CustomerTable({ customers }: { customers: CustomerWithHealth[] }) {
   const [sortKey, setSortKey] = useState<SortKey>('health');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [search, setSearch] = useState('');
+  const [healthFilter, setHealthFilter] = useState<HealthFilter>('all');
+  const [riskOnly, setRiskOnly] = useState(false);
 
-  const sorted = useMemo(() => {
-    const arr = [...customers];
+  const visible = useMemo(() => {
+    let arr = [...customers];
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      arr = arr.filter(
+        (c) => c.name.toLowerCase().includes(q) || c.csm.toLowerCase().includes(q)
+      );
+    }
+    if (healthFilter !== 'all') arr = arr.filter((c) => c.health.band === healthFilter);
+    if (riskOnly) arr = arr.filter((c) => c.churnRisk);
     arr.sort((a, b) => {
       let cmp = 0;
       switch (sortKey) {
-        case 'health':
-          cmp = a.health.score - b.health.score;
-          break;
-        case 'renewal':
-          cmp = a.daysToRenewal - b.daysToRenewal;
-          break;
-        case 'mrr':
-          cmp = a.mrr - b.mrr;
-          break;
-        case 'name':
-          cmp = a.name.localeCompare(b.name);
-          break;
+        case 'health': cmp = a.health.score - b.health.score; break;
+        case 'renewal': cmp = a.daysToRenewal - b.daysToRenewal; break;
+        case 'mrr': cmp = a.mrr - b.mrr; break;
+        case 'name': cmp = a.name.localeCompare(b.name); break;
       }
       return sortDir === 'asc' ? cmp : -cmp;
     });
     return arr;
-  }, [customers, sortKey, sortDir]);
+  }, [customers, search, healthFilter, riskOnly, sortKey, sortDir]);
 
   function toggle(k: SortKey) {
     if (sortKey === k) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
@@ -104,10 +122,74 @@ export default function CustomerTable({ customers }: { customers: CustomerWithHe
     }
   }
 
-  const headerCell = 'whitespace-nowrap bg-paper text-[10px] font-medium uppercase tracking-eyebrow text-ink-4 border-b border-line sticky top-0';
+  const headerCell = 'whitespace-nowrap bg-paper text-[10px] font-medium uppercase tracking-eyebrow text-ink-4 border-b border-line sticky top-[53px]';
+
+  const isFiltered = search.trim() !== '' || healthFilter !== 'all' || riskOnly;
 
   return (
-    <table className="w-full">
+    <>
+      {/* Filter toolbar */}
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-line bg-white px-8 py-[11px]">
+        <div className="relative">
+          <span className="pointer-events-none absolute left-[9px] top-1/2 -translate-y-1/2 text-ink-4">
+            <SearchIcon />
+          </span>
+          <input
+            type="text"
+            placeholder="Search by name or CSM…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-[210px] rounded border border-line bg-white py-[5px] pl-[28px] pr-3 text-[12.5px] text-ink-1 placeholder:text-ink-5 focus:border-ink-3 focus:outline-none"
+          />
+        </div>
+
+        <div className="flex items-center gap-1">
+          {HEALTH_FILTERS.map((f) => {
+            const active = healthFilter === f.key;
+            return (
+              <button
+                key={f.key}
+                onClick={() => setHealthFilter(f.key)}
+                className={[
+                  'inline-flex items-center gap-[5px] rounded-rect px-[9px] py-[4px] text-[11px] font-medium transition-colors duration-100',
+                  active
+                    ? 'bg-ink-1 text-white'
+                    : 'border border-line text-ink-3 hover:border-line-s hover:text-ink-2',
+                ].join(' ')}
+              >
+                {f.dot && (
+                  <span
+                    className="inline-block h-[6px] w-[6px] rounded-full"
+                    style={{ background: active ? 'white' : f.dot }}
+                  />
+                )}
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          onClick={() => setRiskOnly(!riskOnly)}
+          className={[
+            'inline-flex items-center gap-[5px] rounded-rect px-[9px] py-[4px] text-[11px] font-medium transition-colors duration-100',
+            riskOnly
+              ? 'bg-signal text-white'
+              : 'border border-line text-ink-3 hover:border-line-s hover:text-ink-2',
+          ].join(' ')}
+        >
+          <ChurnFlag size={9} />
+          At risk
+        </button>
+
+        {isFiltered && (
+          <span className="ml-auto text-[11.5px] text-ink-4">
+            {visible.length} of {customers.length}
+          </span>
+        )}
+      </div>
+
+      <table className="w-full">
       <thead>
         <tr>
           <th className={`${headerCell} px-8 py-[9px] text-left`}>
@@ -139,7 +221,14 @@ export default function CustomerTable({ customers }: { customers: CustomerWithHe
         </tr>
       </thead>
       <tbody>
-        {sorted.map((c) => {
+        {visible.length === 0 ? (
+          <tr>
+            <td colSpan={7} className="px-8 py-10 text-center text-[13px] text-ink-4">
+              No customers match your filters.
+            </td>
+          </tr>
+        ) : null}
+        {visible.map((c) => {
           const renewalSoon = c.daysToRenewal <= 60 && c.daysToRenewal >= 0;
           return (
             <tr key={c.id} className="border-b border-line bg-white transition-colors duration-75 hover:bg-paper">
@@ -188,5 +277,6 @@ export default function CustomerTable({ customers }: { customers: CustomerWithHe
         })}
       </tbody>
     </table>
+    </>
   );
 }

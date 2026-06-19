@@ -79,7 +79,7 @@ const NAV: NavItem[] = [
   { label: 'Customers', icon: ICONS.customers, href: '/', matchPrefix: '/customers' },
   { label: 'Analytics', icon: ICONS.analytics, href: '/analytics' },
   { label: 'Playbooks', icon: ICONS.playbooks, href: '/playbooks' },
-  { label: 'Calendar', icon: ICONS.calendar, disabled: true },
+  { label: 'Calendar', icon: ICONS.calendar, href: '/calendar' },
   { label: 'Alerts', icon: ICONS.alerts, href: '/alerts' },
 ];
 

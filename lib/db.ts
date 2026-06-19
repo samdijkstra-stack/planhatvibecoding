@@ -40,6 +40,14 @@ async function init(): Promise<Client> {
          author TEXT NOT NULL,
          timestamp TEXT NOT NULL
        )`,
+      `CREATE TABLE IF NOT EXISTS integration_secrets (
+         provider TEXT PRIMARY KEY,
+         ciphertext TEXT NOT NULL,
+         iv TEXT NOT NULL,
+         auth_tag TEXT NOT NULL,
+         meta TEXT NOT NULL DEFAULT '{}',
+         updated_at TEXT NOT NULL
+       )`,
       `CREATE INDEX IF NOT EXISTS idx_contacts_customer ON contacts(customer_id)`,
       `CREATE INDEX IF NOT EXISTS idx_activities_customer ON activities(customer_id)`,
     ],

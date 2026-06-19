@@ -48,6 +48,15 @@ async function init(): Promise<Client> {
          meta TEXT NOT NULL DEFAULT '{}',
          updated_at TEXT NOT NULL
        )`,
+      `CREATE TABLE IF NOT EXISTS users (
+         id TEXT PRIMARY KEY,
+         google_sub TEXT UNIQUE,
+         email TEXT UNIQUE NOT NULL,
+         name TEXT NOT NULL,
+         role TEXT NOT NULL DEFAULT 'csm',
+         created_at TEXT NOT NULL,
+         last_login TEXT
+       )`,
       `CREATE INDEX IF NOT EXISTS idx_contacts_customer ON contacts(customer_id)`,
       `CREATE INDEX IF NOT EXISTS idx_activities_customer ON activities(customer_id)`,
     ],

@@ -437,6 +437,16 @@ const SEED: SeedCustomer[] = [
 ];
 
 export async function seedIfEmpty(db: Client) {
+  // Seed admin user
+  const existingUsers = await db.execute('SELECT COUNT(*) AS n FROM users');
+  if (Number(existingUsers.rows[0]?.n ?? 0) === 0) {
+    await db.execute({
+      sql: `INSERT INTO users (id, google_sub, email, name, role, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)`,
+      args: ['usr_001', null, 'sam@dijkstradigital.com', 'Sam Dijkstra', 'admin', new Date().toISOString()],
+    });
+  }
+
   const existing = await db.execute('SELECT COUNT(*) AS n FROM customers');
   const n = Number(existing.rows[0]?.n ?? 0);
   if (n > 0) return;

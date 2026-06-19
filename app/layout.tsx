@@ -1,6 +1,8 @@
 import './globals.css';
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
 import Sidebar from '@/components/Sidebar';
+import { verifySessionToken } from '@/lib/auth';
 
 export const metadata: Metadata = {
   title: 'Planhat — Customer Success Platform',
@@ -8,6 +10,17 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  let sidebarUser: { name: string; initial: string; role: string } | null = null;
+  try {
+    const token = cookies().get('ph_session')?.value;
+    if (token) {
+      const u = verifySessionToken(token);
+      if (u) sidebarUser = { name: u.name, initial: u.name[0].toUpperCase(), role: u.role };
+    }
+  } catch {
+    // APP_ENCRYPTION_KEY not set or token invalid — no sidebar user
+  }
+
   return (
     <html lang="en">
       <head>
@@ -20,7 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="font-sans">
         <div className="flex h-screen overflow-hidden">
-          <Sidebar />
+          {sidebarUser && <Sidebar user={sidebarUser} />}
           <main className="flex-1 overflow-y-auto bg-white">{children}</main>
         </div>
       </body>

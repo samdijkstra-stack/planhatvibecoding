@@ -93,7 +93,13 @@ function isActive(item: NavItem, pathname: string): boolean {
   return pathname === item.href || pathname.startsWith(item.href + '/');
 }
 
-export default function Sidebar() {
+interface SidebarUser {
+  name: string;
+  initial: string;
+  role: string;
+}
+
+export default function Sidebar({ user }: { user: SidebarUser }) {
   const pathname = usePathname();
   const settingsActive = pathname === '/settings' || pathname.startsWith('/settings/');
   const profileActive = pathname === '/profile' || pathname.startsWith('/profile/');
@@ -126,21 +132,31 @@ export default function Sidebar() {
         />
       </nav>
 
-      <Link
-        href="/profile"
-        className={[
-          'flex items-center gap-[9px] border-t border-white/[0.07] px-[14px] py-[10px] transition-colors duration-100',
-          profileActive ? 'bg-white/[0.05]' : 'hover:bg-white/[0.03]',
-        ].join(' ')}
-      >
-        <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[3px] bg-signal text-[11px] font-semibold text-white">
-          S
-        </div>
-        <div>
-          <div className="text-[12.5px] font-medium leading-[1.3] text-white/[0.88]">Sam Dijkstra</div>
-          <div className="text-[10.5px] text-white/[0.32]">CSM Lead</div>
-        </div>
-      </Link>
+      <div className="border-t border-white/[0.07]">
+        <Link
+          href="/profile"
+          className={[
+            'flex items-center gap-[9px] px-[14px] py-[10px] transition-colors duration-100',
+            profileActive ? 'bg-white/[0.05]' : 'hover:bg-white/[0.03]',
+          ].join(' ')}
+        >
+          <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[3px] bg-signal text-[11px] font-semibold text-white">
+            {user.initial}
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <div className="truncate text-[12.5px] font-medium leading-[1.3] text-white/[0.88]">
+              {user.name}
+            </div>
+            <div className="text-[10.5px] capitalize text-white/[0.32]">{user.role}</div>
+          </div>
+        </Link>
+        <a
+          href="/api/auth/logout"
+          className="flex w-full items-center px-[14px] py-[7px] text-[11px] text-white/[0.25] transition-colors hover:text-white/[0.5]"
+        >
+          Sign out
+        </a>
+      </div>
     </aside>
   );
 }

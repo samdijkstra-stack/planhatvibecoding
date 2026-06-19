@@ -1,17 +1,12 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { getActivitiesByAuthor, listCustomers } from '@/lib/customers';
 import { SmallHealthBar } from '@/components/HealthBadge';
 import { ChurnFlag } from '@/components/ChurnFlag';
+import { verifySessionToken } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
-
-const ME = {
-  name: 'Sam Dijkstra',
-  role: 'CSM Lead',
-  email: 'sam.dijkstra@planhat.com',
-  timezone: 'Europe/Amsterdam',
-  initial: 'S',
-};
 
 function fmtEur(n: number) {
   if (n >= 1000) return `€${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k`;
@@ -43,6 +38,18 @@ const ACT_STYLES: Record<string, { color: string; label: string; char: string; b
 };
 
 export default async function ProfilePage() {
+  const token = cookies().get('ph_session')?.value;
+  const sessionUser = token ? verifySessionToken(token) : null;
+  if (!sessionUser) redirect('/login');
+
+  const ME = {
+    name: sessionUser.name,
+    role: sessionUser.role === 'admin' ? 'Admin' : 'CSM',
+    email: sessionUser.email,
+    timezone: 'Europe/Amsterdam',
+    initial: sessionUser.name[0].toUpperCase(),
+  };
+
   const allCustomers = await listCustomers();
   const owned = allCustomers
     .filter((c) => c.csm === ME.name)

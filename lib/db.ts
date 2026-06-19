@@ -57,6 +57,21 @@ async function init(): Promise<Client> {
          created_at TEXT NOT NULL,
          last_login TEXT
        )`,
+      `CREATE TABLE IF NOT EXISTS playbook_overrides (
+         playbook_id TEXT PRIMARY KEY,
+         description TEXT NOT NULL,
+         updated_at TEXT NOT NULL
+       )`,
+      `CREATE TABLE IF NOT EXISTS enrollments (
+         id TEXT PRIMARY KEY,
+         playbook_id TEXT NOT NULL,
+         contact_id TEXT NOT NULL,
+         customer_id TEXT NOT NULL,
+         enrolled_at TEXT NOT NULL,
+         enrolled_by TEXT NOT NULL,
+         match_reason TEXT NOT NULL,
+         UNIQUE(playbook_id, contact_id)
+       )`,
       `CREATE INDEX IF NOT EXISTS idx_contacts_customer ON contacts(customer_id)`,
       `CREATE INDEX IF NOT EXISTS idx_activities_customer ON activities(customer_id)`,
     ],

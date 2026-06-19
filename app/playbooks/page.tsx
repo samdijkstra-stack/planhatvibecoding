@@ -1,73 +1,8 @@
+import Link from 'next/link';
 import { listCustomers } from '@/lib/customers';
-import type { CustomerWithHealth } from '@/lib/types';
+import { PLAYBOOKS } from '@/lib/playbooks';
 
 export const dynamic = 'force-dynamic';
-
-interface Playbook {
-  category: string;
-  title: string;
-  description: string;
-  steps: number;
-  trigger: string;
-  count: (cs: CustomerWithHealth[]) => number;
-}
-
-const PLAYBOOKS: Playbook[] = [
-  {
-    category: 'Save play',
-    title: 'Renewal save play',
-    description:
-      'Multi-touch sequence triggered when an at-risk account is within 60 days of renewal. Includes executive escalation, save offer template, and weekly check-ins.',
-    steps: 7,
-    trigger: 'Health < 60 and renewal ≤ 60 days',
-    count: (cs) => cs.filter((c) => c.churnRisk && c.daysToRenewal <= 60).length,
-  },
-  {
-    category: 'Adoption',
-    title: 'Detractor follow-up',
-    description:
-      'Outreach cadence for accounts that returned a negative NPS. Discovery call, root-cause capture, and remediation plan handoff to engineering.',
-    steps: 4,
-    trigger: 'NPS < 0',
-    count: (cs) => cs.filter((c) => c.nps < 0).length,
-  },
-  {
-    category: 'Onboarding',
-    title: 'Onboarding kickoff',
-    description:
-      'First 30 days after contract close — workspace setup, integration mapping, champion enablement, and a 60-day milestone review.',
-    steps: 9,
-    trigger: 'Account created within 30 days',
-    count: () => 0,
-  },
-  {
-    category: 'Expansion',
-    title: 'Power user expansion',
-    description:
-      'Sequence for high-usage accounts approaching plan limits. Surfaces upsell signals, schedules an expansion conversation, and routes to AE.',
-    steps: 5,
-    trigger: 'Usage ≥ 85% and health ≥ 70',
-    count: (cs) => cs.filter((c) => c.usage >= 85 && c.health.score >= 70).length,
-  },
-  {
-    category: 'Adoption',
-    title: 'Quarterly business review',
-    description:
-      'Structured QBR for Enterprise accounts — outcome review, roadmap alignment, and renewal preview. Auto-schedules 14 days before quarter end.',
-    steps: 6,
-    trigger: 'Enterprise tier · quarterly cadence',
-    count: (cs) => cs.filter((c) => c.tier === 'Enterprise').length,
-  },
-  {
-    category: 'Risk',
-    title: 'Critical health intervention',
-    description:
-      'Immediate response when health drops into the critical band. Triages support load, validates champion engagement, and surfaces blockers to leadership.',
-    steps: 5,
-    trigger: 'Health < 40',
-    count: (cs) => cs.filter((c) => c.health.band === 'red').length,
-  },
-];
 
 export default async function PlaybooksPage() {
   const customers = await listCustomers();
@@ -88,37 +23,53 @@ export default async function PlaybooksPage() {
       <div className="px-8 py-6">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {PLAYBOOKS.map((p) => {
-            const inFlight = p.count(customers);
+            const inFlight = p.match(customers, []).length > 0
+              ? p.match(customers, []).map(m => m.customer.id).filter((v, i, a) => a.indexOf(v) === i).length
+              : 0;
+            // count distinct customers matching trigger
+            const matchingCustomers = new Set(
+              customers.filter((c) => {
+                if (p.slug === 'renewal-save-play') return c.churnRisk && c.daysToRenewal <= 60;
+                if (p.slug === 'detractor-followup') return c.nps < 0;
+                if (p.slug === 'onboarding-kickoff') return c.created_at > new Date(Date.now() - 30 * 86400000).toISOString();
+                if (p.slug === 'power-user-expansion') return c.usage >= 85 && c.health.score >= 70;
+                if (p.slug === 'quarterly-business-review') return c.tier === 'Enterprise';
+                if (p.slug === 'critical-health-intervention') return c.health.band === 'red';
+                return false;
+              }).map((c) => c.id)
+            ).size;
+
             return (
-              <article
-                key={p.title}
-                className="group rounded border border-line bg-white p-6 transition-colors duration-150 hover:border-line-s"
-              >
-                <div className="eyebrow mb-3">{p.category}</div>
-                <h2 className="display text-[18px] leading-[1.25] text-ink-1">{p.title}</h2>
-                <p className="mt-3 text-[12.5px] leading-[1.55] text-ink-3">{p.description}</p>
+              <Link key={p.slug} href={`/playbooks/${p.slug}`} className="group block">
+                <article className="h-full rounded border border-line bg-white p-6 transition-colors duration-150 hover:border-ink-3">
+                  <div className="eyebrow mb-3">{p.category}</div>
+                  <h2 className="display text-[18px] leading-[1.25] text-ink-1">{p.title}</h2>
+                  <p className="mt-3 line-clamp-3 text-[12.5px] leading-[1.55] text-ink-3">
+                    {p.description.split('\n')[0]}
+                  </p>
 
-                <div className="mt-5 grid grid-cols-2 gap-3 border-t border-line pt-4">
-                  <Stat label="Steps" value={String(p.steps)} />
-                  <Stat
-                    label="In flight"
-                    value={String(inFlight)}
-                    color={inFlight > 0 ? '#f06a2a' : '#0a0a0a'}
-                  />
-                </div>
+                  <div className="mt-5 grid grid-cols-2 gap-3 border-t border-line pt-4">
+                    <Stat label="Steps" value={String(p.steps.length)} />
+                    <Stat
+                      label="In flight"
+                      value={String(matchingCustomers)}
+                      color={matchingCustomers > 0 ? '#f06a2a' : '#0a0a0a'}
+                    />
+                  </div>
 
-                <div className="mt-4 text-[10.5px] uppercase tracking-eyebrow text-ink-4">
-                  Trigger
-                </div>
-                <div className="mt-1 text-[12px] text-ink-2">{p.trigger}</div>
+                  <div className="mt-4 text-[10.5px] uppercase tracking-eyebrow text-ink-4">
+                    Trigger
+                  </div>
+                  <div className="mt-1 text-[12px] text-ink-2">{p.trigger}</div>
 
-                <div className="mt-5 flex items-center justify-between">
-                  <span className="text-[11px] text-ink-4">Last edited 6d ago</span>
-                  <span className="text-[11.5px] text-ink-3 transition-colors group-hover:text-ink-1">
-                    Open ↗
-                  </span>
-                </div>
-              </article>
+                  <div className="mt-5 flex items-center justify-between">
+                    <span className="text-[11px] text-ink-4">Last edited 6d ago</span>
+                    <span className="text-[11.5px] text-ink-3 transition-colors group-hover:text-ink-1">
+                      Open ↗
+                    </span>
+                  </div>
+                </article>
+              </Link>
             );
           })}
         </div>
@@ -131,10 +82,7 @@ function Stat({ label, value, color }: { label: string; value: string; color?: s
   return (
     <div>
       <div className="text-[10.5px] uppercase tracking-eyebrow text-ink-4">{label}</div>
-      <div
-        className="display num mt-[2px] text-[18px]"
-        style={{ color: color ?? '#0a0a0a' }}
-      >
+      <div className="display num mt-[2px] text-[18px]" style={{ color: color ?? '#0a0a0a' }}>
         {value}
       </div>
     </div>
